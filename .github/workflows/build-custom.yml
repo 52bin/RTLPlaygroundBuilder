@@ -8,7 +8,8 @@ on:
     inputs:
       machine:
         description: >-
-          设备型号 MACHINE（machine/ 目录下的 .c 文件名），填 all 则编译全部机型。
+          设备型号 MACHINE（machine/ 目录下的 .c 文件名）。
+          多个机型用空格分隔，如 "FG_8GT_1SX DEFAULT_8C_1SFP"；填 all 则编译全部机型。
         required: true
         default: 'FG_8GT_1SX'
       ip:
@@ -107,43 +108,55 @@ jobs:
             echo "No custom config provided, using upstream default config.txt"
           fi
 
-      - name: Build firmware (${{ inputs.machine || 'default' }})
+      # machine 参数用法（也见上方 workflow_dispatch 的 inputs 说明）：
+      #   - 单机型：FG_8GT_1SX
+      #   - 多机型：用空格分隔，如 FG_8GT_1SX DEFAULT_8C_1SFP
+      #   - 全部：all（编译 machine/ 下所有机型）
+      #
+      # 编译并按机型归拢产物。每个机型一个顶层目录，内含：
+      #   rtlplayground-v<版本>-<机型>.bin          直刷镜像（文件名自带机型）
+      #   rtlplayground_oem_upgrade-<机型>.bin      OEM 升级镜像（仅勾选时，按机型单独编译）
+      # OEM 镜像不是通用镜像（每个机型固件不同），故在多机型模式下对每个机型单独
+      # 编一次 installer，确保目录里那一个 OEM 与本机型一一对应。
+      - name: Build and stage firmware by machine
         working-directory: RTLPlayground
         run: |
+          set -e
           if [ "$MACHINE" = "all" ]; then
-            # 编译 machine/ 目录下全部机型；个别失败不中断整个任务
-            ok=0; fail=0
-            for m in $(basename -a machine/*.c | sed 's/\.c$//'); do
-              echo "=== Building $m ==="
-              if make MACHINE="$m"; then ok=$((ok+1)); else fail=$((fail+1)); echo "FAILED: $m"; fi
-            done
-            echo "Machines built ok=$ok failed=$fail"
-            [ "$fail" -eq 0 ] || echo "::warning:: $fail machine(s) failed to build"
+            machines=$(basename -a machine/*.c | sed 's/\.c$//')
           else
-            make MACHINE="$MACHINE"
+            machines="$MACHINE"
           fi
-
-      - name: Build OEM upgrade installer (optional)
-        if: env.BUILD_OEM == 'true'
-        working-directory: RTLPlayground
-        run: |
-          cd installer
-          make
-
-      - name: List produced images
-        working-directory: RTLPlayground
-        run: |
-          echo "--- direct flash images ---"
-          ls -l output/*/*.bin output/rtlplayground.bin 2>/dev/null || true
-          echo "--- OEM upgrade image ---"
-          ls -l installer/output/*.bin 2>/dev/null || true
+          ok=0; fail=0
+          for m in $machines; do
+            echo "=== Building $m ==="
+            if ! make MACHINE="$m"; then
+              echo "FAILED: $m (firmware)"
+              fail=$((fail+1)); continue
+            fi
+            # 归拢直刷镜像到 staging/<机型>/
+            mkdir -p "$GITHUB_WORKSPACE/staging/$m"
+            cp output/$m/*.bin "$GITHUB_WORKSPACE/staging/$m/"
+            # 可选：为当前机型单独编译 OEM 升级镜像
+            if [ "$BUILD_OEM" = "true" ]; then
+              if (cd installer && make) && \
+                 cp installer/output/rtlplayground_oem_upgrade.bin \
+                    "$GITHUB_WORKSPACE/staging/$m/rtlplayground_oem_upgrade-$m.bin"; then
+                :
+              else
+                echo "FAILED: $m (oem installer)"
+              fi
+            fi
+            ok=$((ok+1))
+          done
+          echo "Machines built ok=$ok failed=$fail"
+          [ "$fail" -eq 0 ] || echo "::warning:: $fail machine(s) failed"
+          echo "--- staged structure ---"
+          find "$GITHUB_WORKSPACE/staging" -type f | sort
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rtlplayground-firmware
-          path: |
-            RTLPlayground/output/*/*.bin
-            RTLPlayground/output/rtlplayground.bin
-            RTLPlayground/installer/output/*.bin
+          path: staging
           if-no-files-found: error
