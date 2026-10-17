@@ -1,11 +1,4 @@
 # RTLPlayground 固件：自定义 / 定期编译 Workflow
-#
-#
-#
-# 注意：
-#  - 编译环境用 debian:trixie 容器（apt 自带 sdcc>=4.5），避免 Ubuntu runner 上 sdcc 过旧编不过。
-#  - 每次运行都是对上游的一次全新 checkout，编到的就是上游当时的最新 commit。
-#  - Artifacts 默认保留 90 天；如需长期归档可在编译后自动推送到 Release/Tag。
 
 name: Build RTLPlayground (custom)
 
@@ -84,7 +77,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt update
-          apt install -y make gcc sdcc xxd python-is-python3 libjson-c-dev zlib1g-dev
+          apt install -y git make gcc sdcc xxd python-is-python3 libjson-c-dev zlib1g-dev
 
       - name: Generate custom config.txt from inputs
         working-directory: RTLPlayground
