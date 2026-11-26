@@ -1,4 +1,4 @@
-# RTLPlayground 固件：自定义 / 定期编译 Workflow
+# RTLPlayground 固件：手动编译 Workflow
 
 
 name: Build RTLPlayground (custom)
@@ -38,12 +38,8 @@ on:
           要编译的上游分支 / Tag / 提交SHA（留空用上游默认分支 main）
         required: false
         default: ''
-  schedule:
-    # 每天 03:00 (UTC) 自动编译上游最新代码，做到“及时更新”。
-    # 想改频率就改 cron：分 时 日 月 周。例如每周一早上 -> '0 3 * * 1'
-    - cron: '0 3 * * *'
 
-# 定时任务只在默认分支运行；本 workflow 只读取上游公开代码并上传产物，无需写仓库权限
+# 本 workflow 只读取上游公开代码并上传产物，无需写仓库权限
 permissions:
   contents: read
 
