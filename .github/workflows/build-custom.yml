@@ -84,6 +84,13 @@ jobs:
           ref: ${{ inputs.ref || '' }}
           path: RTLPlayground
 
+      # 上游 Makefile 会按 sdcc/* 内容从源码构建 patched SDCC，缓存以加速后续构建
+      - name: Cache patched SDCC toolchain
+        uses: actions/cache@v4
+        with:
+          path: RTLPlayground/toolchain
+          key: sdcc-${{ hashFiles('RTLPlayground/sdcc/*') }}
+
       - name: Show upstream commit
         working-directory: RTLPlayground
         run: |
