@@ -8,10 +8,10 @@ on:
     inputs:
       machine:
         description: >-
-          设备型号 MACHINE（machine/ 目录下的 .c 文件名）。
-          多个机型用空格分隔，如 "FG_8GT_1SX DEFAULT_8C_1SFP"；填 all 则编译全部机型。
+          机型名 MACHINE（machine/machines.json 中的 machine 字段，如 RUIYING_RY_8GT_1SX）。
+          多个机型用空格分隔，如 "RUIYING_RY_8GT_1SX AMPCOM_WAM902_SWTG018AS"；填 all 则编译全部机型。
         required: true
-        default: 'FG_8GT_1SX'
+        default: 'RUIYING_RY_8GT_1SX'
       ip:
         description: 预置交换机 IP（可选，如 192.168.10.247）
         required: false
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      MACHINE: ${{ inputs.machine || 'FG_8GT_1SX' }}
+      MACHINE: ${{ inputs.machine || 'RUIYING_RY_8GT_1SX' }}
       IP: ${{ inputs.ip }}
       GW: ${{ inputs.gateway }}
       NETMASK: ${{ inputs.netmask }}
@@ -64,7 +64,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y make gcc xxd python-is-python3 libjson-c-dev zlib1g-dev
+          sudo apt-get install -y make gcc xxd jq python-is-python3 libjson-c-dev zlib1g-dev
 
       # sdcc 必须 >=4.5，从官方 SourceForge 下载 4.5.0 预编译包（与本地验证一致）
       - name: Install SDCC 4.5 (8051 compiler)
@@ -109,9 +109,9 @@ jobs:
           fi
 
       # machine 参数用法（也见上方 workflow_dispatch 的 inputs 说明）：
-      #   - 单机型：FG_8GT_1SX
-      #   - 多机型：用空格分隔，如 FG_8GT_1SX DEFAULT_8C_1SFP
-      #   - 全部：all（编译 machine/ 下所有机型）
+      #   - 单机型：RUIYING_RY_8GT_1SX（machine/machines.json 中的 machine 字段）
+      #   - 多机型：用空格分隔，如 RUIYING_RY_8GT_1SX AMPCOM_WAM902_SWTG018AS
+      #   - 全部：all（编译 machine/machines.json 中登记的所有机型）
       #
       # 编译并按机型归拢产物。每个机型一个顶层目录，内含：
       #   rtlplayground-v<版本>-<机型>.bin          直刷镜像（文件名自带机型）
@@ -123,7 +123,7 @@ jobs:
         run: |
           set -e
           if [ "$MACHINE" = "all" ]; then
-            machines=$(basename -a machine/*.c | sed 's/\.c$//')
+            machines=$(jq -r '.[].machine' machine/machines.json)
           else
             machines="$MACHINE"
           fi
